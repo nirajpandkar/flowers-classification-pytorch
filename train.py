@@ -90,7 +90,7 @@ def train(model, trainloader, validloader, epochs, print_every, criterion, optim
             'best_accuracy': (best_accuracy/len(validloader))*100
             }, is_best)
 
-def save_checkpoint(state, is_best, filename='checkpoint.pth'):
+def save_checkpoint(state, is_best=False, filename='checkpoint.pth'):
     torch.save(state, filename)
     if is_best:
         shutil.copyfile(filename, 'model_best.pth')
@@ -99,10 +99,11 @@ def save_checkpoint(state, is_best, filename='checkpoint.pth'):
 def check_accuracy_on_test(testloader, model):    
     correct = 0
     total = 0
-    model.to('cpu')
+    model.to('cuda')
     with torch.no_grad():
         for data in testloader:
             images, labels = data
+            images, labels = images.to('cuda'), labels.to('cuda')
             outputs = model(images)
             _, predicted = torch.max(outputs.data, 1)
             total += labels.size(0)
