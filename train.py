@@ -31,7 +31,7 @@ def validation(model, testloader, criterion, device):
     return test_loss, accuracy
 
 
-def train(model, trainloader, validloader, epochs, print_every, criterion, optimizer, arch="vgg16", device='cuda'):
+def train(model, trainloader, validloader, epochs, print_every, criterion, optimizer, arch="vgg16", device='cuda', model_dir="models"):
     epochs = epochs
     print_every = print_every
     steps = 0
@@ -88,12 +88,12 @@ def train(model, trainloader, validloader, epochs, print_every, criterion, optim
             'class_idx_mapping': model.class_idx_mapping,
             'arch': arch,
             'best_accuracy': (best_accuracy/len(validloader))*100
-            }, is_best)
+            }, is_best, model_dir, 'checkpoint.pth')
 
-def save_checkpoint(state, is_best=False, filename='checkpoint.pth'):
-    torch.save(state, filename)
+def save_checkpoint(state, is_best=False, model_dir="models", filename='checkpoint.pth'):
+    torch.save(state, os.path.join(model_dir, filename))
     if is_best:
-        shutil.copyfile(filename, 'model_best.pth')
+        shutil.copyfile(filename, os.path.join(model_dir,'model_best.pth'))
 
 
 def check_accuracy_on_test(testloader, model):    
@@ -128,8 +128,8 @@ def load_data_folder(data_folder="data"):
     valid_dir = os.path.join(data_folder, "valid")
     # Define transforms for the training, validation, and testing sets
     train_transforms = transforms.Compose([
-        transforms.RandomResizedCrop(size=224),
         transforms.RandomRotation(30),
+        transforms.RandomResizedCrop(size=224),
         transforms.RandomHorizontalFlip(),
         transforms.RandomVerticalFlip(),
         transforms.ToTensor(),
@@ -137,7 +137,8 @@ def load_data_folder(data_folder="data"):
     ])
 
     validation_transforms = transforms.Compose([
-        transforms.Resize(size=(224, 224)),
+        transforms.Resize(256),
+        transforms.CenterCrop(224),
         transforms.ToTensor(),
         transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
     ])
@@ -156,15 +157,18 @@ def build_model(arch="vgg16", hidden_units=4096, class_idx_mapping=None):
     model=None
     if arch == "vgg16":
         model = models.vgg16(pretrained=True)
-    elif arch == "vgg13":
-        model = models.vgg13(pretrained=True)
+    else:
+        exec("model = models.{}(pretrained=True)".format(arch))
+
+    input_features = model.classifier[0].in_features
 
     for param in model.parameters():
         param.requires_grad = False
 
     classifier = nn.Sequential(OrderedDict([
-                                            ('fc1', nn.Linear(25088, hidden_units)),
+                                            ('fc1', nn.Linear(input_features, hidden_units)),
                                             ('relu', nn.ReLU()),
+                                            ('dropout', nn.Dropout(p=0.5)),
                                             ('fc2', nn.Linear(hidden_units, 102)),
                                             ('output', nn.LogSoftmax(dim=1))
                                             ]))
@@ -179,8 +183,8 @@ def main():
     ap.add_argument("data_dir", help="Directory containing the dataset.",
                     default="data", nargs="?")
 
-    VALID_ARCH_CHOICES = ("vgg16", "vgg13")
-    ap.add_argument("--arch", help="Model architecture. (default: vgg16)", choices=VALID_ARCH_CHOICES,
+    VALID_ARCH_CHOICES = ("vgg16", "vgg13", "resnet18", "densenet121", "inception_v3")
+    ap.add_argument("--arch", help="Model architecture from 'torchvision.models'. (default: vgg16)", choices=VALID_ARCH_CHOICES,
                     default=VALID_ARCH_CHOICES[0])
 
     ap.add_argument("--hidden_units", help="Number of units the hidden layer should consist of. (default: 4096)",
@@ -195,7 +199,11 @@ def main():
     ap.add_argument("--gpu", help="Use GPU or CPU for training",
                     action="store_true")
 
+    ap.add_argument("--model_dir", help="Directory which will contain the model checkpoints.",
+                    default="models")
     args = vars(ap.parse_args())
+
+    os.system("mkdir -p models")
 
     (train_dataloader, valid_dataloader, class_idx_mapping) = load_data_folder(data_folder=args["data_dir"])
     
@@ -218,7 +226,8 @@ def main():
         criterion=criterion,
         optimizer=optimizer,
         arch=args["arch"],
-        device=device)
+        device=device,
+        model_dir=args["model_dir"])
 
 if __name__ == '__main__':
     main()
