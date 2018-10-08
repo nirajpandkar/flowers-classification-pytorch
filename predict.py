@@ -100,6 +100,7 @@ def predict(image_path, model_checkpoint, topk=5, device="cpu"):
     probabilities = torch.exp(log_probabilities)
     probs, indices = probabilities.topk(topk)
     
+    probs, indices = probs.to('cpu'), indices.to('cpu')
     probs = probs.numpy().squeeze()
     indices = indices.numpy().squeeze()
     classes = [idx_class_mapping[index] for index in indices]
@@ -120,10 +121,15 @@ def main():
     ap.add_argument("--gpu", help="Use GPU or CPU for training", action="store_true")
     args = vars(ap.parse_args())
 
+    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+
     print(args)
-    device = None
-    if args["gpu"]:
+
+    if args["gpu"] and device == "cuda":
         device = "cuda"
+    elif args["gpu"] and device == "cpu":
+        print("CUDA not found on device, using CPU instead!")
+        device = "cpu"
     else:
         device = "cpu"
 
