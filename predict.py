@@ -54,11 +54,10 @@ def load_model(model_checkpoint):
     checkpoint = torch.load(model_checkpoint)
     
     arch = checkpoint["arch"]
-    model = None
-    if arch == "vgg16":
-        model = models.vgg16(pretrained=True)
-    elif arch == "vgg13":
-        model = models.vgg13(pretrained=True)
+    my_local = dict()
+    exec("model = models.{}(pretrained=True)".format(arch), globals(), my_local)
+
+    model =  my_local['model']
     
     for param in model.parameters():
         param.requires_grad = False
